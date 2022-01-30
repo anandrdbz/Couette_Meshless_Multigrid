@@ -1,4 +1,5 @@
-Incompressible Couette flow between two cylinders, with the inner one rotating at a constant angular speed
+Incompressible Couette flow between two cylinders, with the inner one rotating at a constant angular speed. 
+
 Msh files in conc_circle_geoms generated with gmsh
 
 4 main components - 
