@@ -28,7 +28,7 @@ std::vector<std::tuple<double, double, double>> pointsFromMshFile(const char* fn
 		points.push_back(std::tuple<double, double, double>(xtemp, ytemp, ztemp));
 		char* buf = new char [50];
 		fgets(buf,50,file);
-		delete buf;
+		delete[] buf;
 	}
 	return points;
 }

@@ -42,10 +42,11 @@ public:
 	Eigen::VectorXd diags;
 	vector<int> bcFlags_;
 	bool neumannFlag_;
+	bool regularizeFlag_;
 	bool implicitFlag_;
 
 	Grid(vector<std::tuple<double, double, double>> points, vector<Boundary> boundaries, 
-				GridProperties properties, Eigen::VectorXd source);
+				GridProperties properties, Eigen::VectorXd source, bool regularize);
 	~Grid();
 
 	void boundaryOp(std::string coarse);

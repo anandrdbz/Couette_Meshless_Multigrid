@@ -88,7 +88,7 @@ void FractionalStepMultigrid::vCycle() {
 
 		(grids_[i - 1].second->source_)(Eigen::seq(0, grids_[i - 1].second->laplaceMatSize_ - 1)) = (*(restrictionMatrices_[i])) * (currGrid->residual())(Eigen::seq(0, currGrid->laplaceMatSize_ - 1));
 		grids_[i - 1].second->fix_vector_bound_coarse(&grids_[i - 1].second->source_);
-		if (currGrid->neumannFlag_) {
+		if (currGrid->regularizeFlag_) {
 			grids_[i - 1].second->source_.coeffRef(grids_[i - 1].second->source_.rows() - 1) = 0;
 		}
 
@@ -139,7 +139,12 @@ double FractionalStepMultigrid::gmres(double tol, std::string Solver){
 		if(Solver == "Multigrid"){
 			finestGrid->source_ = *(finestGrid->prolong_mat) * r;
 			finestGrid->values_->setZero();
-			vCycle();
+			for(int j = 0; j < 3; j++){
+				vCycle();
+				//double mgtol = finestGrid->residual().lpNorm<1>() / finestGrid->source_.lpNorm<1>(); 
+				//cout << "mgtol " << mgtol << endl;
+
+			}
 			
 			z = *(finestGrid->restrict_mat) * *(finestGrid->values_);			
 		}
@@ -180,9 +185,10 @@ double FractionalStepMultigrid::gmres(double tol, std::string Solver){
 		Eigen::VectorXd b = finestGrid->rhs_;
 		l2res_prev = l2res;
 		l2res = r.lpNorm<2>() / (b.lpNorm<2>()) ;
-		//cout<<l2res<<endl;
+
 		residuals_.push_back(l2res);
 		if(l2res < tol){
+			cout << "l2res: " << l2res << endl;
 			break;
 		}
 		/*if(std::abs(l2res_prev - l2res) < 1e-12){

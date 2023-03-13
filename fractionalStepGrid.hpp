@@ -14,7 +14,7 @@ public:
 	Eigen::SparseMatrix<double, Eigen::RowMajor> *derivXMat_, *derivYMat_, *uvLaplaceMat_,*derivXMat2_,*derivYMat2_,*uvLaplaceMat2_;
 
 	FractionalStepGrid(vector<std::tuple<double, double, double>> points, vector<Boundary> boundaries,
-		GridProperties properties, Eigen::VectorXd source);
+		GridProperties properties, Eigen::VectorXd source, bool regularize);
 	~FractionalStepGrid();
 	void set_uv_bound();
 	void build_derivX_mat();

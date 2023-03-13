@@ -4,7 +4,7 @@
 using std::cout;
 using std::endl;
 Grid::Grid(vector<Point> points, vector<Boundary> boundaries,
-	GridProperties properties, Eigen::VectorXd source) {
+	GridProperties properties, Eigen::VectorXd source, bool regularize) {
 	int numPoint = (int)(points.size());
 	points_ = points;
 	boundaries_ = boundaries;
@@ -12,11 +12,12 @@ Grid::Grid(vector<Point> points, vector<Boundary> boundaries,
 	source_ = source;
 	cond_rbf = vector<double>();
 	neumannFlag_ = false;
+	regularizeFlag_ = regularize;
 	setNeumannFlag();
 
 	laplaceMatSize_ = numPoint;
-	int A_size = neumannFlag_ ? numPoint + 1 : numPoint;
-	bcFlags_ = std::vector<int>(numPoint + 1, 0);
+	int A_size = numPoint + (int) regularizeFlag_;
+	bcFlags_ = std::vector<int>(numPoint + (int) regularizeFlag_, 0);
 	normalVecs_ = std::vector<Point>(numPoint);
 	laplaceMat_ = new Eigen::SparseMatrix<double, Eigen::RowMajor>(A_size, A_size);
 	laplaceMat_->setZero();
@@ -52,7 +53,7 @@ Grid::~Grid() {
 }
 
 void Grid::setBCFlag(int bNum, std::string type, vector<double> boundValues) {
-	for(int i = 0; i < laplaceMatSize_+1; i++){
+	for(int i = 0; i < laplaceMatSize_+(int) regularizeFlag_; i++){
 		bcFlags_[i] = 0;
 	}
 	for (size_t i = 0; i < boundaries_.size(); i++) {
@@ -91,7 +92,10 @@ void Grid::modify_coeff_neumann(std::string coarse) {
 			}
 		}
 	}
-	source_.coeffRef(source_.rows() - 1) = 0;
+	if(regularizeFlag_){
+		source_.coeffRef(source_.rows() - 1) = 0;
+	}
+	
 }
 void Grid::bound_eval_neumann() {
 	const double* laplaceValues = laplaceMat_->valuePtr();
@@ -138,7 +142,7 @@ void Grid::sor(Eigen::SparseMatrix<double, Eigen::RowMajor>* matrix, Eigen::Vect
 		outerIdx = 0;
 
 		for (int i = 0; i < matrix->rows(); i++) {
-			if (!(neumannFlag_ && i == matrix->rows() - 1) && bcFlags_[i] != 0) {
+			if (!(regularizeFlag_ && i == matrix->rows() - 1) && bcFlags_[i] != 0) {
 				outerIdx++;
 				continue;
 			}
@@ -175,6 +179,7 @@ Eigen::VectorXd Grid::residual() {
 
 Eigen::VectorXd Grid::true_residual(){
 	Eigen::VectorXd res = rhs_ - (*interior_mat) * (*sol_);
+	return res;
 }
 
 double Grid::cond_L() {
@@ -207,7 +212,7 @@ void Grid::print_check_bc_normal_derivs() {
 	innerIdx = 0;
 	outerIdx = 0;
 
-	for (int i = 0; i < laplaceMat_->rows() - 1; i++) {
+	for (int i = 0; i < laplaceMat_->rows() - (int) regularizeFlag_; i++) {
 		if (bcFlags_[i] != 2) {
 			outerIdx++;
 			continue;
@@ -547,12 +552,12 @@ void Grid::build_laplacian() {
 				}
 			}
 		}
-		if (neumannFlag_ && bcFlags_[i] != 2) {
+		if (regularizeFlag_ && bcFlags_[i] != 2) {
 			tripletList.push_back(Eigen::Triplet<double>(i, laplaceMatSize_, 1));
 		}
 	}
-	if (neumannFlag_) {
-		for (int i = 0; i < laplaceMatSize_ + 1; i++) {
+	if (regularizeFlag_) {
+		for (int i = 0; i < laplaceMatSize_ + (int) regularizeFlag_; i++) {
 			if ((i == laplaceMatSize_) || bcFlags_[i] != 2) {
 				tripletList.push_back(Eigen::Triplet<double>(laplaceMatSize_, i, 1));
 			}
@@ -660,7 +665,7 @@ void Grid::build_laplacian() {
 		}
 	}
 	delete laplaceMat_;
-	laplaceMat_ = new Eigen::SparseMatrix<double, Eigen::RowMajor>(points_.size() + (int) neumannFlag_, points_.size() + (int) neumannFlag_);
+	laplaceMat_ = new Eigen::SparseMatrix<double, Eigen::RowMajor>(points_.size() + (int) regularizeFlag_, points_.size() + (int) regularizeFlag_);
 	laplaceMat_->setFromTriplets(tripletList.begin(), tripletList.end());
 	laplaceMat_->makeCompressed();
 
@@ -829,9 +834,13 @@ void Grid::build_interior_mat(){
 			count++;
 		}
 	}
-	tripletList.push_back(Eigen::Triplet<double>(count,laplaceMatSize_,1));
-	tripletList2.push_back(Eigen::Triplet<double>(laplaceMatSize_,count,1));
-	count++;
+
+	if(regularizeFlag_){
+		tripletList.push_back(Eigen::Triplet<double>(count,laplaceMatSize_,1));
+		tripletList2.push_back(Eigen::Triplet<double>(laplaceMatSize_,count,1));
+		count++;
+	}
+
 
 
 
@@ -840,6 +849,7 @@ void Grid::build_interior_mat(){
 	restrict_mat->makeCompressed();
 	prolong_mat->setFromTriplets(tripletList2.begin(), tripletList2.end());
 	prolong_mat->makeCompressed();
+
 
 	*(interior_mat) = *(restrict_mat) * *(laplaceMat_) * *(prolong_mat);
 

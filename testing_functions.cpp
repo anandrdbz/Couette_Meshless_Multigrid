@@ -147,7 +147,7 @@ Grid* genGmshGridDirichlet(string geomtype, const char* filename, GridProperties
 		bcs.push_back(inner);
 	}
 
-	Grid* grid = new Grid(points, bcs, props, source);
+	Grid* grid = new Grid(points, bcs, props, source, 0);
 	grid->implicitFlag_ = false;
 	grid->setBCFlag(0, std::string("dirichlet"), bValues);
 	if (geomtype.compare("square") != 0) {
@@ -264,7 +264,7 @@ Grid* genGmshGridNeumann(string geomtype, const char* filename, GridProperties p
 		inner.values = bValues_inner;
 		bcs.push_back(inner);
 	}
-	Grid* grid = new Grid(points, bcs, props, source);
+	Grid* grid = new Grid(points, bcs, props, source, 0);
 	grid->implicitFlag_ = true;
 	grid->setBCFlag(0, std::string("neumann"), bValues);
 	if (geomtype.compare("square") != 0) {

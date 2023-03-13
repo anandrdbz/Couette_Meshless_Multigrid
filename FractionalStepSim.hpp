@@ -14,7 +14,7 @@ public:
 
 };
 FractionalStepParams gen_fracstep_param(int numGrids, int poly_deg, double dt, double mu, double rho, double ppe_conv);
-FractionalStepGrid* genFractionalStepGrid(const char* filename, GridProperties props, double dt, double mu, double rho, double ppe_conv, std::string coarse);
+FractionalStepGrid* genFractionalStepGrid(const char* filename, GridProperties props, double dt, double mu, double rho, double ppe_conv, std::string coarse, bool gmres, bool regularize);
 void check_derivs(FractionalStepGrid* grid);
 void run_fracstep_param(FractionalStepParams params, double endtime, std::string Solver);
 void run_frac_step_test();

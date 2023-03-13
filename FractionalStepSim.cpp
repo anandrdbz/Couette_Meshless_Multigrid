@@ -3,15 +3,15 @@
 #include<string.h>
 
 
-FractionalStepGrid* genFractionalStepGrid(const char* filename, GridProperties props, double dt, double mu, double rho, double ppe_conv, std::string coarse) {
+FractionalStepGrid* genFractionalStepGrid(const char* filename, GridProperties props, double dt, double mu, double rho, double ppe_conv, std::string coarse, bool regularizeFlag_) {
 
 	vector<std::tuple<double, double, double>> points;
 	points = pointsFromMshFile(filename);
 	double x, y;
 	vector<int> bPts, bPts_inner;
 	vector<double> bValues, bValues_inner;
-	Eigen::VectorXd actual(points.size() + 1);
-	Eigen::VectorXd source(points.size() + 1);
+	Eigen::VectorXd actual(points.size() + (int) regularizeFlag_);
+	Eigen::VectorXd source(points.size() + (int) regularizeFlag_);
 	double re = rho / mu;
 	for (int i = 0; i < points.size(); i++) {
 		x = std::get<0>(points[i]);
@@ -40,7 +40,7 @@ FractionalStepGrid* genFractionalStepGrid(const char* filename, GridProperties p
 	bcs.push_back(boundary);
 
 
-	FractionalStepGrid* grid = new FractionalStepGrid(points, bcs, props, source);
+	FractionalStepGrid* grid = new FractionalStepGrid(points, bcs, props, source, regularizeFlag_);
 	cout << grid->source_.rows() << endl;
 
 	grid->mu = mu;
@@ -55,6 +55,7 @@ FractionalStepGrid* genFractionalStepGrid(const char* filename, GridProperties p
 	grid->setBCFlag(0, std::string("neumann"/*"dirichlet"*/), bValues);
 
 	grid->build_normal_vecs(filename, "square");
+
 	grid->rcm_order_points();
 	grid->build_deriv_normal_bound();
 	grid->build_laplacian();
@@ -77,7 +78,7 @@ FractionalStepParams gen_fracstep_param(int numGrids, int poly_deg, double dt, d
 	for (int i = 0; i < numGrids; i++) {
 		props[i].iters = 5;
 		props[i].polyDeg = (i == numGrids - 1) ? poly_deg : 3;
-		props[i].omega = 1.4;
+		props[i].omega = 1.0;
 		props[i].rbfExp = 3;
 		props[i].stencilSize = (i == 0) ? (int)(2.0 * (props[i].polyDeg + 1) * (props[i].polyDeg + 2) / 2)
 			: (int)(2.0 * (props[i].polyDeg + 1) * (props[i].polyDeg + 2) / 2);
@@ -129,11 +130,11 @@ void check_derivs(FractionalStepGrid* grid) {
 	cout << "correction diff: " << (*grid->u - (*grid->u_hat - grid->dt / grid->rho * (*grid->derivXMat_ * grid->values_->head(grid->laplaceMatSize_)))).lpNorm<1>()/grid->laplaceMatSize_ << endl;
 	//u cout << "pressure laplace error: " << ((grid->laplaceMat_->block(0, 0, grid->laplaceMatSize_, grid->laplaceMatSize_) * grid->values_->head(grid->laplaceMatSize_)) - exact_del2p).lpNorm<1>() / grid->laplaceMatSize_ << endl;
 }
-void run_fracstep_param(FractionalStepParams params, double endtime, std::string Solver) {
+void run_fracstep_param(FractionalStepParams params, double endtime, std::string Solver, bool gmresFlag_, bool regularizeFlag_) {
 	FractionalStepMultigrid mg;
 	for (int i = 0; i < (int)(params.filenames.size()); i++) {
 		std::string coarse = (i == params.filenames.size() - 1) ? "fine" : "coarse";
-		mg.addGrid(genFractionalStepGrid((params.directory + params.filenames[i]).c_str(), params.props[i], params.dt, params.mu, params.rho, params.ppe_conv_res, coarse));
+		mg.addGrid(genFractionalStepGrid((params.directory + params.filenames[i]).c_str(), params.props[i], params.dt, params.mu, params.rho, params.ppe_conv_res, coarse, regularizeFlag_));
 	}
 	mg.buildMatrices();
 	std::clock_t start = std::clock();
@@ -170,26 +171,34 @@ void run_fracstep_param(FractionalStepParams params, double endtime, std::string
 		finestGrid->rhs_ = *(finestGrid->restrict_mat)*finestGrid->source_;
 
 		//finestGrid->sol_->setZero();
-		
-		/*while (mg.residual() >= params.ppe_conv_res) {
-			mg.vCycle();
+
+		if(gmresFlag_){
+
+			double tol = params.ppe_conv_res;
+			double l2res;
+
+			while(true){
+				l2res = mg.gmres(tol, Solver);
+				if(l2res < tol){
+					break;
+				}
+			}
+
+
+			*(finestGrid->values_) = *(finestGrid->prolong_mat) * *(finestGrid->sol_) ;
+			finestGrid->source_ = *(source_copy);
 			finestGrid->bound_eval_neumann();
-		}*/
 
-		double tol = params.ppe_conv_res;
-		
-	
-		double l2res;
-
-		while(true){
-			l2res = mg.gmres(tol, Solver);
-			if(l2res < tol){
-				break;
+		}
+		else{
+			while (mg.residual() >= params.ppe_conv_res) {
+				mg.vCycle();
+				finestGrid->bound_eval_neumann();
+				cout << "mgtol " << mg.residual() << endl;
 			}
 		}
-		*(finestGrid->values_) = *(finestGrid->prolong_mat) * *(finestGrid->sol_) ;
-		finestGrid->source_ = *(source_copy);
-		finestGrid->bound_eval_neumann();
+
+
 		
 
 				
@@ -258,6 +267,8 @@ void run_fracstep_param(FractionalStepParams params, double endtime, std::string
 	double vCycTime = (std::clock() - start) / (double)(CLOCKS_PER_SEC);
 }
 void run_frac_step_test() {
-	FractionalStepParams param = gen_fracstep_param(2, 3, 0.01, 0.01, 1, 1e-12);
-	run_fracstep_param(param, 5, "ILU");
+	bool gmresFlag_ = false;
+	bool regularizeFlag_ = true;
+	FractionalStepParams param = gen_fracstep_param(3, 6, 0.002, 0.01, 1, 1e-12);
+	run_fracstep_param(param, 5, "Multigrid", gmresFlag_, regularizeFlag_);
 }

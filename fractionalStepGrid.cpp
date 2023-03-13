@@ -1,6 +1,6 @@
 #include "fractionalStepGrid.hpp"
 FractionalStepGrid::FractionalStepGrid(vector<std::tuple<double, double, double>> points, vector<Boundary> boundaries,
-	GridProperties properties, Eigen::VectorXd source) : Grid(points, boundaries, properties, source){
+	GridProperties properties, Eigen::VectorXd source, bool regularize) : Grid(points, boundaries, properties, source, regularize){
 	
 	u = new Eigen::VectorXd(laplaceMatSize_);
 	u_old = new Eigen::VectorXd(laplaceMatSize_);
